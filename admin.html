@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - StarSafe RBAC</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f1f5f9; margin: 0; padding: 0; }
+        .top-navbar { display: flex; justify-content: space-between; align-items: center; background: #1e293b; color: white; padding: 10px 20px; }
+        .top-navbar h2 { margin: 0; font-size: 1.25rem; }
+        .logout-link { color: #ef4444; cursor: pointer; font-weight: bold; }
+        .page-content { padding: 20px; max-width: 1200px; margin: 0 auto; }
+        .admin-stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-box { background: white; border: 1px solid #cbd5e1; border-radius: 6px; padding: 15px; text-align: center; }
+        .stat-box p { margin: 0; color: #64748b; font-weight: 600; font-size: 0.85rem; }
+        .stat-box h3 { margin: 8px 0 0 0; font-size: 1.8rem; color: #0f172a; }
+        .stat-box.danger h3 { color: #ef4444; }
+        .stat-box.primary h3 { color: #3b82f6; }
+        .panel-card { background: white; border: 1px solid #cbd5e1; border-radius: 6px; margin-bottom: 20px; overflow: hidden; }
+        .panel-header { background: #f8fafc; padding: 12px 15px; font-weight: bold; border-bottom: 1px solid #cbd5e1; color: #1e293b; }
+        .panel-body { padding: 15px; }
+        .badge-danger { background: #fee2e2; color: #991b1b; padding: 3px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; }
+        .badge-success { background: #dcfce7; color: #166534; padding: 3px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; }
+        .badge-warning { background: #fef3c7; color: #92400e; padding: 3px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; }
+        .btn-sm { padding: 3px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; font-weight: 600; margin-right: 5px; }
+        .btn-block { background: #ef4444; color: white; }
+        .btn-detail { background: #3b82f6; color: white; }
+        .btn-unblock { background: #10b981; color: white; }
+    </style>
+</head>
+<body>
+
+    <link rel="stylesheet" href="style.css">
+
+    <div class="top-navbar">
+        <h2>Admin Dashboard</h2>
+        <div>
+            <span id="adminName">🔔 Admin</span> | 
+            <span class="logout-link" onclick="executeLogout()">Logout</span>
+        </div>
+    </div>
+
+    <div class="page-content">
+        <!-- 5 Kotak Ringkasan Statistik -->
+        <div class="admin-stat-row">
+            <div class="stat-box">
+                <p>Total User</p>
+                <h3 id="admTotalUser">0</h3>
+            </div>
+            <div class="stat-box primary">
+                <p>Pengajuan Surat</p>
+                <h3 id="admTotalLetters">0</h3>
+            </div>
+            <div class="stat-box">
+                <p>Login Berhasil</p>
+                <h3 id="admLoginBerhasil">0</h3>
+            </div>
+            <div class="stat-box">
+                <p>Login Gagal</p>
+                <h3 id="admLoginGagal">0</h3>
+            </div>
+            <div class="stat-box danger">
+                <p>Brute Force</p>
+                <h3 id="admBruteForce">0 IP</h3>
+            </div>
+        </div>
+
+        <!-- 1. TABEL BARU: REKAPITULASI PENGAJUAN SURAT MAHASISWA -->
+        <div class="panel-card">
+            <div class="panel-header">📌 Rekapitulasi Pengajuan Surat Akademik Mahasiswa</div>
+            <div class="panel-body">
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Tanggal Pengajuan</th>
+                                <th>Nama Mahasiswa</th>
+                                <th>Jenis Surat</th>
+                                <th>Keperluan</th>
+                                <th>Status Berkas</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admLettersTableBody">
+                            <!-- Diisi Otomatis oleh JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. TABEL AKTIVITAS LOGIN TERBARU -->
+        <div class="panel-card">
+            <div class="panel-header">Aktivitas Login Terbaru</div>
+            <div class="panel-body">
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Waktu</th>
+                                <th>Username</th>
+                                <th>IP Address</th>
+                                <th>Status</th>
+                                <th>Jumlah Percobaan</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admLogTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. TABEL DETEKSI BRUTE FORCE -->
+        <div class="panel-card">
+            <div class="panel-header">Deteksi Brute Force</div>
+            <div class="panel-body">
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>IP Address</th>
+                                <th>Username</th>
+                                <th>Gagal Login</th>
+                                <th>Status</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admDetectionTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. TABEL DAFTAR IP DIBLOKIR -->
+        <div class="panel-card">
+            <div class="panel-header">Daftar IP Diblokir</div>
+            <div class="panel-body">
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>IP Address</th>
+                                <th>Alasan</th>
+                                <th>Waktu Diblokir</th>
+                                <th>Status</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admBlockedTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = "https://ghmbuvtbmqwzurwewcvm.supabase.co"; 
+        const SUPABASE_ANON_KEY = "sb_publishable_2Ble_8dtDi1cl0lxN6xbWQ__2LUDu3U";
+        const sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentUser = JSON.parse(localStorage.getItem('starsafe_user'));
+
+        // PENJAGA HAK AKSES (RBAC GUARD FOR ADMIN.HTML)
+        if (!currentUser || currentUser.role !== 'admin') {
+            alert("Akses Ditolak! Anda bukan Admin. Mengalihkan ke Halaman Login...");
+            window.location.href = "index.html";
+        } else {
+            document.getElementById("adminName").innerText = `🔔 ${currentUser.username} (Admin)`;
+            initAdminEngine();
+        }
+
+        // 1. FUNGSI UNTUK MERENDER DASHBOARD (Membaca data dari Supabase)
+        async function initAdminEngine() {
+            const { data: users } = await sbClient.from('profiles').select('*');
+            const { data: logs } = await sbClient.from('documents').select('*').order('id', { ascending: false });
+
+            document.getElementById("admTotalUser").innerText = users ? users.length : 0;
+
+            let loginBerhasil = 0;
+            let loginGagal = 0;
+            let totalSurat = 0;
+            let detectionMap = {};
+
+            const logTbody = document.getElementById("admLogTableBody");
+            const detTbody = document.getElementById("admDetectionTableBody");
+            const lettersTbody = document.getElementById("admLettersTableBody");
+            
+            logTbody.innerHTML = ""; 
+            detTbody.innerHTML = ""; 
+            lettersTbody.innerHTML = "";
+
+            if (logs) {
+                logs.forEach((log) => {
+                    const parts = log.document_name.split('|');
+                    const status = parts[0] || "Gagal";
+
+                    // A. KATEGORI PENGAJUAN SURAT
+                  // A. KATEGORI PENGAJUAN SURAT
+                    if (status === "SURAT" || status === "VERIF_SURAT") {
+                        totalSurat++;
+                        const jenisSurat = parts[1] || "-";
+                        const keperluan = parts[2] || "-";
+                        const statusVerif = parts[3] || "PENDING"; // PENDING / APPROVED / REJECTED
+
+                        const timeString = new Date(log.created_at).toLocaleString('id-ID', { 
+                            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+                        });
+
+                        let statusBadge = `<span class="badge-warning">⏳ Menunggu Verifikasi</span>`;
+                        let actionBtns = `
+                            <button class="btn-sm btn-unblock" onclick="verifyLetter(${log.id}, 'APPROVED')">Setujui</button>
+                            <button class="btn-sm btn-block" onclick="verifyLetter(${log.id}, 'REJECTED')">Tolak</button>
+                        `;
+
+                        if (statusVerif === "APPROVED") {
+                            statusBadge = `<span class="badge-success">✅ Disetujui</span>`;
+                            actionBtns = `<small style="color:#10b981; font-weight:bold;">Selesai</small>`;
+                        } else if (statusVerif === "REJECTED") {
+                            statusBadge = `<span class="badge-danger">❌ Ditolak</span>`;
+                            actionBtns = `<small style="color:#ef4444; font-weight:bold;">Selesai</small>`;
+                        }
+
+                        lettersTbody.innerHTML += `
+                            <tr>
+                                <td>${timeString}</td>
+                                <td><b>${log.username}</b></td>
+                                <td>${jenisSurat}</td>
+                                <td>${keperluan}</td>
+                                <td>${statusBadge}</td>
+                                <td>${actionBtns}</td>
+                            </tr>
+                        `;
+                        return;
+                    }
+
+                    // Abaikan teks khusus BLOKIR/UNBLOCK agar tidak mengacaukan statistik login
+                    if (status === "BLOKIR" || status === "UNBLOCK") return;
+
+                    // B. KATEGORI LOG LOGIN (BERHASIL / GAGAL)
+                    const ip = parts[1] || "192.168.1.10";
+                    const attempt = parts[2] || "1";
+
+                    if (status === "Berhasil") loginBerhasil++;
+                    if (status === "Gagal") loginGagal++;
+
+                    const timeString = new Date(log.created_at).toLocaleString('id-ID', { 
+                        day: '2-digit', 
+                        month: 'short', 
+                        year: 'numeric', 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                    
+                    const statusText = status === "Berhasil" ? "✅ Berhasil" : "❌ Gagal";
+
+                    logTbody.innerHTML += `<tr><td>${timeString}</td><td><b>${log.username}</b></td><td>${ip}</td><td>${statusText}</td><td>${attempt}</td></tr>`;
+
+                    const key = `${ip}_${log.username}`;
+                    if (!detectionMap[key]) { detectionMap[key] = { ip: ip, username: log.username, failCount: 0 }; }
+                    if (status === "Gagal") detectionMap[key].failCount++;
+                });
+            }
+
+            document.getElementById("admLoginBerhasil").innerText = loginBerhasil;
+            document.getElementById("admLoginGagal").innerText = loginGagal;
+            document.getElementById("admTotalLetters").innerText = totalSurat;
+
+            if (totalSurat === 0) {
+                lettersTbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#7A889B;">Belum ada pengajuan surat dari mahasiswa.</td></tr>`;
+            }
+
+            let bruteForceIPCount = 0;
+            Object.values(detectionMap).forEach(item => {
+                let statusBadge = `<span class="badge-success">🟢 Normal</span>`;
+                let actionBtn = `<button class="btn-sm btn-detail" onclick="showDetail('${item.ip}', '${item.username}', ${item.failCount})">Detail</button>`;
+
+                if (item.failCount >= 3) {
+                    statusBadge = `<span class="badge-danger">🔴 Terdeteksi</span>`;
+                    actionBtn = `<button class="btn-sm btn-block" onclick="triggerBlockIP('${item.ip}')">Blokir</button> ` + actionBtn;
+                    bruteForceIPCount++;
+                }
+
+                detTbody.innerHTML += `
+                    <tr>
+                        <td>${item.ip}</td>
+                        <td><b>${item.username}</b></td>
+                        <td>${item.failCount} kali</td>
+                        <td>${statusBadge}</td>
+                        <td>${actionBtn}</td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById("admBruteForce").innerText = `${bruteForceIPCount} IP`;
+            renderBlockedTable();
+        }
+
+        // 2. FUNGSI DETAIL PENILAIAN KEAMANAN
+        function showDetail(ip, username, failCount) {
+            let statusKeamanan = failCount >= 3 ? "⚠️ TERDIKASI SERANGAN BRUTE FORCE" : "✅ AMAN / NORMAL";
+            alert(
+                `📌 DETAIL ANALISIS KEAMANAN IP\n` +
+                `-----------------------------------------\n` +
+                `• IP Address   : ${ip}\n` +
+                `• Target User  : ${username}\n` +
+                `• Gagal Login  : ${failCount} Kali Percobaan\n` +
+                `• Status       : ${statusKeamanan}\n` +
+                `-----------------------------------------\n` +
+                `Sistem merekomendasikan pemblokiran jika jumlah percobaan gagal melebihi batas wajar.`
+            );
+        }
+
+        // FUNGSI UNTUK VERIFIKASI SURAT (SETUJUI / TOLAK)
+        async function verifyLetter(logId, statusBaru) {
+            // Ambil data surat yang akan diverifikasi
+            const { data: log } = await sbClient.from('documents').select('*').eq('id', logId).single();
+            if (!log) return alert("Data tidak ditemukan!");
+
+            const parts = log.document_name.split('|');
+            const jenisSurat = parts[1];
+            const keperluan = parts[2];
+
+            // Update status di Supabase
+            const newDocName = `VERIF_SURAT|${jenisSurat}|${keperluan}|${statusBaru}`;
+
+            const { error } = await sbClient
+                .from('documents')
+                .update({ document_name: newDocName })
+                .eq('id', logId);
+
+            if (error) {
+                alert("Gagal memverifikasi: " + error.message);
+            } else {
+                alert(`Status surat berhasil diperbarui menjadi ${statusBaru === 'APPROVED' ? 'DISETUJUI' : 'DITOLAK'}!`);
+                initAdminEngine(); // Refresh tabel
+            }
+        }
+
+        // 3. FUNGSI UNTUK MEMBLOKIR IP (TERSINPAN PERMANEN DI SUPABASE)
+        async function triggerBlockIP(ip) {
+            if (confirm(`Apakah Anda yakin ingin memblokir IP ${ip}?`)) {
+                const { error } = await sbClient.from('documents').insert([
+                    { document_name: `BLOKIR|${ip}|Brute Force Detected`, username: 'SYSTEM_ADMIN' }
+                ]);
+
+                if (error) {
+                    alert("Gagal memblokir IP di Supabase: " + error.message);
+                } else {
+                    alert(`IP ${ip} BERHASIL DIBLOKIR & tersimpan di Supabase!`);
+                    initAdminEngine();
+                }
+            }
+        }
+
+        // 4. FUNGSI UNTUK MENCABUT BLOKIR / UNBLOCK (TERINTEGRASI SUPABASE)
+        async function triggerUnblockIP(ip) {
+            if (confirm(`Buka kembali akses untuk IP ${ip}?`)) {
+                const { error } = await sbClient.from('documents').insert([
+                    { document_name: `UNBLOCK|${ip}|Akses Dibuka Kembali`, username: 'SYSTEM_ADMIN' }
+                ]);
+
+                if (error) {
+                    alert("Gagal membuka blokir di Supabase: " + error.message);
+                } else {
+                    alert(`Blokir IP ${ip} BERHASIL DICABUT!`);
+                    initAdminEngine();
+                }
+            }
+        }
+
+        // 5. FUNGSI MEMBACA DAFTAR IP DIBLOKIR DARI SUPABASE
+        async function renderBlockedTable() {
+            const blockTbody = document.getElementById("admBlockedTableBody");
+            blockTbody.innerHTML = "";
+
+            const { data: logs } = await sbClient.from('documents')
+                .select('*')
+                .or('document_name.like.BLOKIR%,document_name.like.UNBLOCK%')
+                .order('id', { ascending: true });
+
+            let activeBlockedMap = {};
+
+            if (logs) {
+                logs.forEach(log => {
+                    const parts = log.document_name.split('|');
+                    const action = parts[0];
+                    const ip = parts[1];
+                    const reason = parts[2] || "Brute Force";
+
+                    if (action === "BLOKIR") {
+                        activeBlockedMap[ip] = {
+                            ip: ip,
+                            reason: reason,
+                            time: new Date(log.created_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                        };
+                    } else if (action === "UNBLOCK") {
+                        delete activeBlockedMap[ip];
+                    }
+                });
+            }
+
+            const activeIPs = Object.values(activeBlockedMap);
+
+            if (activeIPs.length === 0) {
+                blockTbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#7A889B;">✨ Tidak ada IP yang sedang diblokir.</td></tr>`;
+                return;
+            }
+
+            activeIPs.forEach(b => {
+                blockTbody.innerHTML += `
+                    <tr>
+                        <td>${b.ip}</td>
+                        <td>${b.reason}</td>
+                        <td>${b.time}</td>
+                        <td><span class="badge-danger">🔒 Diblokir</span></td>
+                        <td><button class="btn-sm btn-unblock" onclick="triggerUnblockIP('${b.ip}')">Unblock</button></td>
+                    </tr>
+                `;
+            });
+        }
+
+        function executeLogout() {
+            sbClient.auth.signOut();
+            localStorage.removeItem('starsafe_user');
+            window.location.href = "index.html";
+        }
+    </script>
+</body>
+</html>
