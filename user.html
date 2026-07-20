@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard - StarSafe Cloud</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* Gaya Tambahan Khusus Elemen Interactive User */
+        .grid-3-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 22px; }
+        .sec-card { background: var(--c-card-bg); border: 1.5px solid var(--c-almond); border-radius: var(--radius-card); padding: 16px; box-shadow: var(--shadow-soft); }
+        .sec-card h4 { font-family: 'Quicksand', sans-serif; font-size: 0.95rem; color: var(--c-rhino); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+        .sec-card p { font-size: 0.85rem; color: #7A889B; margin: 0; }
+        .sec-card .val { font-size: 1.3rem; font-weight: 700; color: var(--c-rhino); margin-top: 4px; }
+        
+        .checklist-item { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 0.875rem; color: var(--c-rhino); }
+        .checklist-item input[type="checkbox"] { accent-color: var(--c-dull-pink); width: 16px; height: 16px; cursor: pointer; }
+
+        /* Badge Style Tambahan */
+        .badge-warning { background: #fef3c7; color: #92400e; padding: 3px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; }
+        .badge-success { background: #dcfce7; color: #166534; padding: 3px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; }
+        .badge-danger { background: #fee2e2; color: #991b1b; padding: 3px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+     <link rel="stylesheet" href="style.css">
+
+    <!-- TOP NAVBAR -->
+    <div class="top-navbar">
+        <h2>Cloud Security System</h2>
+        <div>
+            <span id="usrNavName">👤 User</span> | 
+            <span class="logout-link" onclick="executeLogout()">Logout</span>
+        </div>
+    </div>
+
+    <div class="page-content">
+        <!-- 1. BANNER UCAPAN SELAMAT DATANG -->
+        <div class="panel-card">
+            <div class="panel-body" style="background: #FAECE9; border-left: 5px solid var(--c-dull-pink);">
+                <h3 style="margin: 0 0 5px 0; color: var(--c-rhino);" id="usrWelcomeTitle">Selamat Datang 👋</h3>
+                <p style="margin: 0; color: #7A889B;">Anda berada di dalam zona sistem cloud terenkripsi (Role: User).</p>
+            </div>
+        </div>
+
+        <!-- 2. GRID 3 KARTU METRIK UTAMA -->
+        <div class="grid-3-col">
+            <div class="sec-card">
+                <h4>🛡️ Status Keamanan</h4>
+                <div class="val" style="color: #38A169;">85 / 100</div>
+                <p>Kategori: Sangat Baik</p>
+            </div>
+            <div class="sec-card">
+                <h4>🌐 IP Akses Anda</h4>
+                <div class="val" style="font-size: 1.1rem;">192.168.1.10</div>
+                <p>Koneksi Terenkripsi SSL</p>
+            </div>
+            <div class="sec-card">
+                <h4>🕒 Login Terakhir</h4>
+                <div class="val" id="usrLastLoginTime" style="font-size: 0.95rem; font-weight: 600;">-</div>
+                <p>Sesi Aktif Saat Ini</p>
+            </div>
+        </div>
+
+        <!-- 3. FORM PENGAJUAN SURAT MAHASISWA -->
+        <div class="panel-card">
+            <div class="panel-header">Form Pengajuan Surat Akademik</div>
+            <div class="panel-body">
+                <form id="letterForm" onsubmit="submitLetterRequest(event)">
+                    <div class="form-group">
+                        <label>Pilih Jenis Surat</label>
+                        <select id="letterType" required>
+                            <option value="">-- Pilih Jenis Surat --</option>
+                            <option value="Surat Keterangan Aktif Kuliah">Surat Keterangan Aktif Kuliah</option>
+                            <option value="Surat Permohonan Izin Penelitian/KP">Surat Permohonan Izin Penelitian/KP</option>
+                            <option value="Surat Bebas Perpustakaan">Surat Bebas Perpustakaan</option>
+                            <option value="Surat Rekomendasi Beasiswa">Surat Rekomendasi Beasiswa</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Alasan / Keperluan Pengajuan Surat</label>
+                        <input type="text" id="letterReason" placeholder="Contoh: Persyaratan Beasiswa / Pengajuan Tempat KP..." required>
+                    </div>
+                    <button type="submit" class="btn" style="width: auto; padding: 10px 24px;">Kirim Pengajuan Surat</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 4. TABEL RIWAYAT PENGAJUAN SURAT SAYA -->
+        <div class="panel-card">
+            <div class="panel-header">Riwayat Pengajuan Surat Saya</div>
+            <div class="panel-body">
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Tanggal Pengajuan</th>
+                                <th>Jenis Surat</th>
+                                <th>Keperluan</th>
+                                <th>Status Berkas</th>
+                            </tr>
+                        </thead>
+                        <tbody id="letterHistoryTbody">
+                            <!-- Diisi Otomatis dari Supabase -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. TABEL RIWAYAT AKTIVITAS PRIBADI (SECURITY LOG) -->
+        <div class="panel-card">
+            <div class="panel-header">Riwayat Login Akun Saya</div>
+            <div class="panel-body">
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Waktu & Tanggal</th>
+                                <th>IP Address</th>
+                                <th>Status Akses</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userLogTbody">
+                            <!-- Diisi Otomatis oleh JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. KOTAK DUA KOLOM: CHECKLIST KEAMANAN & UBAH PASSWORD -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px;">
+            
+            <!-- CHECKLIST KEAMANAN -->
+            <div class="panel-card">
+                <div class="panel-header">Checklist Keamanan Mandiri</div>
+                <div class="panel-body">
+                    <div class="checklist-item">
+                        <input type="checkbox" checked disabled>
+                        <span>Gunakan Kombinasi Password Kuat</span>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" checked disabled>
+                        <span>Gunakan Alamat IP Terverifikasi</span>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="chk2fa" onchange="alert('Fitur Simulasi 2FA Diperbarui!')">
+                        <span>Aktifkan Verifikasi 2-Langkah</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- UBAH PASSWORD -->
+            <div class="panel-card">
+                <div class="panel-header">Ganti Kata Sandi</div>
+                <div class="panel-body">
+                    <div class="form-group">
+                        <label>Password Baru</label>
+                        <input type="password" id="newPasswordInput" placeholder="Minimal 6 karakter...">
+                    </div>
+                    <button class="btn" style="padding: 8px 18px; font-size: 0.85rem;" onclick="changeUserPassword()">Perbarui Password</button>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <script>
+        const SUPABASE_URL = "https://ghmbuvtbmqwzurwewcvm.supabase.co"; 
+        const SUPABASE_ANON_KEY = "sb_publishable_2Ble_8dtDi1cl0lxN6xbWQ__2LUDu3U";
+        const sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentUser = JSON.parse(localStorage.getItem('starsafe_user'));
+
+        // RBAC GUARD
+        if (!currentUser) {
+            alert("Sesi Anda berakhir. Mengalihkan ke Halaman Login...");
+            window.location.href = "index.html";
+        } else {
+            document.getElementById("usrNavName").innerText = `👤 ${currentUser.username}`;
+            document.getElementById("usrWelcomeTitle").innerText = `Selamat Datang, ${currentUser.username} 👋`;
+
+            loadUserLogs();
+        }
+
+        // 1. FUNGSI KIRIM PENGAJUAN SURAT
+        async function submitLetterRequest(e) {
+            e.preventDefault();
+            const type = document.getElementById("letterType").value;
+            const reason = document.getElementById("letterReason").value.trim();
+
+            const { error } = await sbClient.from('documents').insert([
+                { document_name: `SURAT|${type}|${reason}`, username: currentUser.username }
+            ]);
+
+            if (error) {
+                alert("Gagal mengirim pengajuan surat: " + error.message);
+            } else {
+                alert("✨ Pengajuan surat berhasil dikirim! Silakan tunggu konfirmasi Admin.");
+                document.getElementById("letterForm").reset();
+                loadUserLogs(); // Refresh data tabel
+            }
+        }
+
+        // 2. FUNGSI BACA LOG LOGIN & RIWAYAT SURAT (SUDAH DIPERBAIKI SINKRONISASI DENGAN ADMIN)
+        async function loadUserLogs() {
+            const { data: logs } = await sbClient.from('documents')
+                .select('*')
+                .eq('username', currentUser.username)
+                .order('id', { ascending: false });
+
+            const logTbody = document.getElementById("userLogTbody");
+            const letterTbody = document.getElementById("letterHistoryTbody");
+            
+            logTbody.innerHTML = "";
+            letterTbody.innerHTML = "";
+
+            let hasLetter = false;
+            let hasLog = false;
+
+            if (logs && logs.length > 0) {
+                // Set waktu login terakhir dari record paling baru
+                const lastLog = logs[0];
+                const timeFormatted = new Date(lastLog.created_at).toLocaleString('id-ID', {
+                    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+                document.getElementById("usrLastLoginTime").innerText = timeFormatted;
+
+                logs.forEach(log => {
+                    const parts = log.document_name.split('|');
+                    const category = parts[0];
+                    
+                    const timeStr = new Date(log.created_at).toLocaleString('id-ID', {
+                        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    });
+
+                    // A. PENGAJUAN SURAT (MENDUKUNG FORMAT "SURAT" DARI USER DAN "VERIF_SURAT" DARI ADMIN)
+                    if (category === "SURAT" || category === "VERIF_SURAT") {
+                        hasLetter = true;
+                        const jenisSurat = parts[1] || "-";
+                        const alasan = parts[2] || "-";
+                        const statusVerif = parts[3] || "PENDING";
+
+                        let statusBadge = `<span class="badge-warning">⏳ Menunggu Verifikasi Admin</span>`;
+                        if (statusVerif === "APPROVED") {
+                            statusBadge = `<span class="badge-success">✅ Disetujui Admin</span>`;
+                        } else if (statusVerif === "REJECTED") {
+                            statusBadge = `<span class="badge-danger">❌ Pengajuan Ditolak</span>`;
+                        }
+
+                        letterTbody.innerHTML += `
+                            <tr>
+                                <td>${timeStr}</td>
+                                <td><b>${jenisSurat}</b></td>
+                                <td>${alasan}</td>
+                                <td>${statusBadge}</td>
+                            </tr>
+                        `;
+                    } 
+                    // B. LOG LOGIN (Berhasil / Gagal)
+                    else if (category === "Berhasil" || category === "Gagal") {
+                        hasLog = true;
+                        const ip = parts[1] || "192.168.1.10";
+                        const statusBadge = category === "Berhasil" 
+                            ? `<span class="badge-success">✅ Berhasil Login</span>`
+                            : `<span class="badge-danger">❌ Gagal Login</span>`;
+
+                        logTbody.innerHTML += `
+                            <tr>
+                                <td>${timeStr}</td>
+                                <td>${ip}</td>
+                                <td>${statusBadge}</td>
+                            </tr>
+                        `;
+                    }
+                });
+            }
+
+            if (!hasLetter) {
+                letterTbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#7A889B;">Belum ada riwayat pengajuan surat.</td></tr>`;
+            }
+            if (!hasLog) {
+                logTbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#7A889B;">Belum ada riwayat aktivitas.</td></tr>`;
+                document.getElementById("usrLastLoginTime").innerText = "Baru Saja";
+            }
+        }
+
+        async function changeUserPassword() {
+            const newPassword = document.getElementById("newPasswordInput").value.trim();
+            if (!newPassword || newPassword.length < 6) {
+                return alert("Password baru minimal 6 karakter!");
+            }
+
+            const { error } = await sbClient.auth.updateUser({ password: newPassword });
+
+            if (error) {
+                alert("Gagal mengganti password: " + error.message);
+            } else {
+                alert("Password berhasil diperbarui!");
+                document.getElementById("newPasswordInput").value = "";
+            }
+        }
+
+        function executeLogout() {
+            sbClient.auth.signOut();
+            localStorage.removeItem('starsafe_user');
+            window.location.href = "index.html";
+        }
+    </script>
+</body>
+</html>
